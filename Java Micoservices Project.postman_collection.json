@@ -212,7 +212,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"3334@gmail.com\",\n  \"password\": \"3334\"\n}"
+              "raw": "{\n  \"email\": \"333@gmail.com\",\n  \"password\": \"333\"\n}"
             },
             "url": {
               "raw": "{{gatewayBaseUrl}}/account/login",
@@ -437,7 +437,7 @@
               },
               {
                 "key": "Authorization",
-                "value": "Bearer {{token}}",
+                "value": "Bearer {{token2}}",
                 "type": "text"
               }
             ],
