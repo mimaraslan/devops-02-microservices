@@ -35,7 +35,7 @@ Yüksek eşzamanlılık ve dağıtık dayanıklılık hedefleriyle tasarlanmış
 | **Gözlemlenebilirlik** | Zipkin / Micrometer tracing (yapılandırma servislere göre); Actuator health. |
 | **Merkezi hata modeli** | Paylaşılan exception tipleri ve HTTP eşlemesi (`GlobalExceptionHandlerLib`). |
 
-Case study ve iyileştirme özetleri için bkz. [`README/CASE_STUDY_EVALUATION_UPDATED.md`](README/CASE_STUDY_EVALUATION_UPDATED.md).
+Case study değerlendirmesi ve iyileştirme özeti: [`README/CASE_STUDY_EVALUATION.md`](README/CASE_STUDY_EVALUATION.md). Orijinal PDF: [EN](README/Case%20Study%20EN.pdf) · [TR](README/Case%20Study%20TR.pdf).
 
 ---
 
@@ -73,45 +73,32 @@ Modül listesi `settings.gradle` dosyasında tanımlıdır.
 
 ## Mimari genel bakış
 
-```mermaid
-flowchart LR
-  subgraph client[İstemci]
-    C[Web / Postman / Mobil]
-  end
-  subgraph edge[Kenar]
-    GW[API Gateway]
-  end
-  subgraph platform[Platform]
-    EU[Eureka]
-    CF[Config Server]
-  end
-  subgraph domain[Domain servisleri]
-    AC[Account]
-    LG[Ledger]
-    FR[Fraud]
-    NT[Notification]
-  end
-  subgraph data[Veri ve mesajlaşma]
-    PG[(PostgreSQL)]
-    RD[(Redis)]
-    KF[Kafka / Redpanda]
-  end
-  C --> GW
-  GW --> EU
-  AC --> CF
-  LG --> CF
-  FR --> CF
-  NT --> CF
-  GW --> AC
-  GW --> LG
-  GW --> FR
-  GW --> NT
-  AC --> PG
-  AC --> RD
-  LG --> PG
-  LG --> KF
-  FR --> KF
-  NT --> KF
+```
+İstemci                 Kenar              Platform
+┌──────────────────┐   ┌─────────────┐   ┌────────────────────┐
+│ Web / Postman /  │──>│ API Gateway │──>│ Eureka             │
+│ Mobil            │   └──────┬──────┘   │ Config Server      │
+└──────────────────┘          │          └─────────┬──────────┘
+                              │                    ^
+                              │    yapılandırma    │
+                              v                    │
+                    ┌─────────┴────────────────────┴─────────┐
+                    │         Domain servisleri              │
+                    │  Account · Ledger · Fraud · Notification│
+                    └─────────┬──────────────────────────────┘
+                              │
+                              v
+                    ┌─────────────────────────────────────────┐
+                    │ Veri ve mesajlaşma                      │
+                    │  PostgreSQL · Redis · Kafka / Redpanda  │
+                    └─────────────────────────────────────────┘
+
+Bağlantılar (özet):
+  İstemci ──> API Gateway ──> Account / Ledger / Fraud / Notification
+  Domain servisleri ──> Config Server, Eureka
+  Account ──> PostgreSQL, Redis
+  Ledger  ──> PostgreSQL, Kafka
+  Fraud / Notification ──> Kafka
 ```
 
 ---
@@ -122,47 +109,34 @@ flowchart LR
 
 ### Dalga diyagramı
 
-```mermaid
-flowchart TB
-  subgraph w1["Dalga 1 — Altyapı (paralel)"]
-    PG[(postgres)]
-    RD[(redis)]
-    RP[redpanda]
-    ZK[zipkin]
-  end
+```
+Dalga 1 — Altyapı (paralel başlar)
+  postgres · redis · redpanda · zipkin
 
-  subgraph w2["Dalga 2"]
-    PG --> PI[postgres-init]
-    PG --> KC[keycloak]
-    EU[eureka-server]
-  end
+Dalga 2
+  postgres ──────────> postgres-init
+  postgres ──────────> keycloak
+  eureka-server       (bağımsız, paralel)
 
-  subgraph w3["Dalga 3"]
-    EU --> CF[config-server]
-  end
+Dalga 3
+  eureka-server ────> config-server
 
-  subgraph w4["Dalga 4 — Mikroservisler (paralel)"]
-    CF --> AC[account-service]
-    CF --> LG[ledger-service]
-    CF --> FR[fraud-service]
-    CF --> NT[notification-service]
-    PI --> AC
-    PI --> LG
-    RD --> AC
-    RD --> LG
-    KC --> AC
-    RP --> LG
-    RP --> FR
-    RP --> NT
-  end
+Dalga 4 — Mikroservisler (paralel)
+  config-server ────> account-service
+  config-server ────> ledger-service
+  config-server ────> fraud-service
+  config-server ────> notification-service
+  postgres-init ────> account-service, ledger-service
+  redis ────────────> account-service, ledger-service
+  keycloak ─────────> account-service
+  redpanda ─────────> ledger-service, fraud-service, notification-service
 
-  subgraph w5["Dalga 5"]
-    AC --> GW[api-gateway]
-    LG --> GW
-    FR --> GW
-    NT --> GW
-    KC --> GW
-  end
+Dalga 5
+  account-service      ──┐
+  ledger-service       ──┤
+  fraud-service        ──├──> api-gateway
+  notification-service ──┤
+  keycloak             ──┘
 ```
 
 ### Servis bağımlılıkları (özet)
@@ -286,10 +260,9 @@ Docker ve host eşlemelerinin tam tablosu için: [`README/DOCKER_DEPLOYMENT_GUID
 | [KAFKA_REDIS_USAGE_REPORT.md](README/KAFKA_REDIS_USAGE_REPORT.md) | Kafka ve Redis kullanımının ayrıntılı raporu |
 | [OPTIMISTIC_LOCKING_OZET.md](README/OPTIMISTIC_LOCKING_OZET.md) | Ledger’da optimistic locking ve sürüm güncellemeleri |
 | [SAGA_PATTERN_ANALYSIS.md](README/SAGA_PATTERN_ANALYSIS.md) | Saga / dağıtık işlem notları ve analiz |
-| [CASE_STUDY_EVALUATION.md](README/CASE_STUDY_EVALUATION.md) | Case study karşılaştırması (özet + tarihsel iyileştirme notları) |
-| [CASE_STUDY_EVALUATION_UPDATED.md](README/CASE_STUDY_EVALUATION_UPDATED.md) | Güncellenmiş gereksinim matrisi ve kalan işler |
-
-PDF case study metni varsa: `README/Case Study.pdf` (depoda mevcutsa).
+| [CASE_STUDY_EVALUATION.md](README/CASE_STUDY_EVALUATION.md) | Case study karşılaştırması, tamamlanan iyileştirmeler ve kalan işler |
+| [Case Study EN.pdf](README/Case%20Study%20EN.pdf) | Orijinal case study metni (İngilizce) |
+| [Case Study TR.pdf](README/Case%20Study%20TR.pdf) | Orijinal case study metni (Türkçe) |
 
 ---
 
